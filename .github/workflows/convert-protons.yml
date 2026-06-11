@@ -1,0 +1,63 @@
+name: Convert protons → tar.zst
+
+on:
+  push:
+    branches: [protons]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y xz-utils zstd
+
+      - name: Convert proton-10-arm64ec
+        run: |
+          cat proton-10-arm64ec.wcp.xz.0{0,1,2,3,4} | xzcat \
+            | zstd --ultra -22 -T0 -o proton-10-arm64ec.tar.zst
+          echo " $(du -h proton-10-arm64ec.tar.zst | cut -f1)"
+
+      - name: Convert proton-9.0-arm64ec
+        run: |
+          cat proton-9.0-arm64ec.txz.0{0,1} | xzcat \
+            | zstd --ultra -22 -T0 -o proton-9.0-arm64ec.tar.zst
+          echo " $(du -h proton-9.0-arm64ec.tar.zst | cut -f1)"
+
+      - name: Convert proton-9.0-x86_64
+        run: |
+          cat proton-9.0-x86_64.txz.00 | xzcat \
+            | zstd --ultra -22 -T0 -o proton-9.0-x86_64.tar.zst
+          echo " $(du -h proton-9.0-x86_64.tar.zst | cut -f1)"
+
+      - name: Converter wine-9.20
+        run: |
+          cat wine-9.20.wcp.0{0,1} | xzcat \
+            | zstd --ultra -22 -T0 -o wine-9.20.tar.zst
+          echo " $(du -h wine-9.20.tar.zst | cut -f1)"
+
+      - name: 50mbs parts sha256
+        run: |
+          for f in proton-10-arm64ec proton-9.0-arm64ec proton-9.0-x86_64 wine-9.20; do
+            split --bytes=50M --numeric-suffixes=0 --suffix-length=2 \
+              "$f.tar.zst" "$f.tar.zst."
+            sha256sum "$f.tar.zst" > "$f.tar.zst.sha256sum"
+          done
+          ls -lh *.tar.zst.*
+
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: protons-zst-latest
+          name: "Protons + Wine zstd (ultra -22)"
+          body: "Convertido de .txz/.wcp para .tar.zst com zstd --ultra -22."
+          files: |
+            *.tar.zst.*
+            *.tar.zst.sha256sum
