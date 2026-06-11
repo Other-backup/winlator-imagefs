@@ -1,0 +1,39 @@
+name: Fix wine upload
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-wine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: protons
+
+      - name: Instalar dependências
+        run: sudo apt-get install -y xz-utils zstd
+
+      - name: Converter wine-9.20
+        run: |
+          cat wine-9.20.wcp.00 wine-9.20.wcp.01 | xzcat \
+            | zstd --ultra -22 -T0 -o wine-9.20.tar.zst
+          echo "✅ $(du -h wine-9.20.tar.zst | cut -f1)"
+
+      - name: Dividir em partes de 50MB
+        run: |
+          split --bytes=50M --numeric-suffixes=0 --suffix-length=2 \
+            wine-9.20.tar.zst wine-9.20.tar.zst.
+          sha256sum wine-9.20.tar.zst > wine-9.20.tar.zst.sha256sum
+          ls -lh wine-9.20.tar.zst.*
+
+      - name: Upload no release existente
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: protons-zst-latest
+          files: |
+            wine-9.20.tar.zst.*
+            wine-9.20.tar.zst.sha256sum
